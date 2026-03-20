@@ -1,0 +1,18 @@
+{
+  "name": "AA SMS",
+  "short_name": "AA SMS",
+  "description": "Private SMS for aa.net.uk VoIP numbers",
+  "start_url": "/aasms/aasms.html",
+  "scope": "/aasms/",
+  "display": "standalone",
+  "background_color": "#0d0d0d",
+  "theme_color": "#0d0d0d",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

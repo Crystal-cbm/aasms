@@ -888,6 +888,7 @@ let ntfyRetryDelay = 3000;
 let ntfyRetryTimer = null;
 let ntfyHeartbeatTimer = null;
 let ntfyLastEvent = 0;
+let ntfyLastMessageTime = parseInt(localStorage.getItem('aasms_ntfy_last') || '0');
 
 function connectNtfy() {
   if (!config.topic) return;
@@ -898,7 +899,9 @@ function connectNtfy() {
   setStatusDot('');
   updateSettingStatus();
 
-  const url = `https://ntfy.sh/${config.topic}/sse`;
+  // Use since= to fetch any messages missed during disconnect
+  const since = ntfyLastMessageTime > 0 ? ntfyLastMessageTime : 'all';
+  const url = `https://ntfy.sh/${config.topic}/sse?since=${since}&poll=0`;
   ntfySource = new EventSource(url);
   ntfyLastEvent = Date.now();
 
@@ -937,6 +940,11 @@ function connectNtfy() {
 
       // ntfy event types: 'open' and 'keepalive' have no message — skip them
       if (data.event === 'open' || data.event === 'keepalive') return;
+      // Track last message time for catch-up on reconnect
+      if (data.time) {
+        ntfyLastMessageTime = data.time;
+        localStorage.setItem('aasms_ntfy_last', data.time);
+      }
 
       // aa.net POSTs URL-encoded form data to ntfy as the message body
       // e.g. scts=...&oa=%2B447...&da=%2B447...&ud=Hello+Sir&
@@ -1062,12 +1070,19 @@ async function sendMessage() {
 
     const result = await response.text();
 
-    if (result.trim().startsWith('OK')) {
+    // corsproxy may wrap response — check for OK anywhere in response
+    if (result.includes('OK')) {
       msg.status = 'sent';
       showToast('Sent ✓', 'success');
-    } else {
+    } else if (result.includes('ERR')) {
       msg.status = 'failed';
-      showToast('Send failed: ' + result.trim(), 'error');
+      const errLine = result.split('
+').find(l => l.includes('ERR')) || result.trim();
+      showToast('Failed: ' + errLine.trim().substring(0, 60), 'error');
+    } else {
+      // Treat ambiguous response as sent if no error
+      msg.status = 'sent';
+      showToast('Sent ✓', 'success');
     }
   } catch(err) {
     msg.status = 'queued';
@@ -1262,7 +1277,7 @@ async function processSendQueue() {
         body: params.toString()
       });
       const result = await response.text();
-      if (result.trim().startsWith('OK')) {
+      if (result.includes('OK')) {
         // Update message status
         if (messages[item.to]) {
           const msg = messages[item.to].find(m => m.id === item.msgId);

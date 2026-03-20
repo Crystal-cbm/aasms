@@ -600,9 +600,15 @@ html, body {
     </div>
 
     <div class="field-group">
+      <div class="field-label">ntfy Server URL</div>
+      <input class="field-input" id="setupNtfyUrl" type="url" placeholder="https://ntfy.sh" autocomplete="off">
+      <div class="field-hint">Leave blank to use the default public ntfy.sh server, or enter the URL of your self-hosted ntfy instance (e.g. <strong>https://ntfy.example.com</strong>)</div>
+    </div>
+
+    <div class="field-group">
       <div class="field-label">ntfy Topic</div>
       <input class="field-input" id="setupTopic" type="text" placeholder="e.g. aasms-myname-a3k9" autocomplete="off">
-      <div class="field-hint">Choose a private random topic name. In aa.net control pages → your VoIP number → SMS Inbound, enter: <strong>https://ntfy.sh/[your-topic]</strong></div>
+      <div class="field-hint">Choose a private random topic name. In aa.net control pages → your VoIP number → SMS Inbound, enter your full ntfy URL as the inbound target (e.g. <strong>https://ntfy.sh/[your-topic]</strong>)</div>
     </div>
 
     <button class="btn btn-primary" onclick="saveSetup()">Save & Start →</button>
@@ -682,6 +688,10 @@ html, body {
           <div class="settings-row-label">ntfy Topic</div>
           <input class="settings-input" id="settingTopic" type="text" placeholder="your-ntfy-topic">
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">ntfy URL</div>
+          <input class="settings-input" id="settingNtfyUrl" type="url" placeholder="https://ntfy.sh">
+        </div>
       </div>
     </div>
 
@@ -746,6 +756,9 @@ html, body {
 <div class="toast" id="toast"></div>
 
 <script>
+// ── CONSTANTS ──
+const DEFAULT_NTFY_URL = 'https://ntfy.sh';
+
 // ── STATE ──
 let config = {};
 let messages = {}; // { number: [{id,from,to,text,ts,sent,status}] }
@@ -803,7 +816,9 @@ function showSettings() {
   document.getElementById('settingNumber').value = config.number || '';
   document.getElementById('settingPassword').value = config.password || '';
   document.getElementById('settingTopic').value = config.topic || '';
-  document.getElementById('ntfyUrlDisplay').textContent = config.topic ? `https://ntfy.sh/${config.topic}` : 'https://ntfy.sh/your-topic';
+  document.getElementById('settingNtfyUrl').value = config.ntfyUrl || '';
+  const ntfyBase = config.ntfyUrl || DEFAULT_NTFY_URL;
+  document.getElementById('ntfyUrlDisplay').textContent = config.topic ? `${ntfyBase}/${config.topic}` : `${ntfyBase}/your-topic`;
   updateSettingStatus();
   updateNotifButton();
   document.getElementById('settingsScreen').classList.remove('hidden');
@@ -827,14 +842,15 @@ function hideNewChat() {
 function saveSetup() {
   const number = document.getElementById('setupNumber').value.trim();
   const password = document.getElementById('setupPassword').value.trim();
-  const topic = document.getElementById('setupTopic').value.trim().replace(/^https?:\/\/ntfy\.sh\//,'');
+  const ntfyUrl = (document.getElementById('setupNtfyUrl').value.trim() || DEFAULT_NTFY_URL).replace(/\/+$/, '');
+  const topic = document.getElementById('setupTopic').value.trim().replace(/^https?:\/\/[^/]+\//, '').split('/')[0];
 
   if (!number || !password || !topic) {
     showToast('Please fill in all fields', 'error');
     return;
   }
 
-  config = { number, password, topic };
+  config = { number, password, topic, ntfyUrl };
   localStorage.setItem('aasms_config', JSON.stringify(config));
   document.getElementById('myNumber').textContent = number;
   showScreen('threadScreen');
@@ -847,17 +863,18 @@ function saveSetup() {
 function saveSettings() {
   const number = document.getElementById('settingNumber').value.trim();
   const password = document.getElementById('settingPassword').value.trim();
-  const topic = document.getElementById('settingTopic').value.trim().replace(/^https?:\/\/ntfy\.sh\//,'');
+  const ntfyUrl = (document.getElementById('settingNtfyUrl').value.trim() || DEFAULT_NTFY_URL).replace(/\/+$/, '');
+  const topic = document.getElementById('settingTopic').value.trim().replace(/^https?:\/\/[^/]+\//, '').split('/')[0];
 
   if (!number || !password || !topic) {
     showToast('Please fill in all fields', 'error');
     return;
   }
 
-  config = { number, password, topic };
+  config = { number, password, topic, ntfyUrl };
   localStorage.setItem('aasms_config', JSON.stringify(config));
   document.getElementById('myNumber').textContent = number;
-  document.getElementById('ntfyUrlDisplay').textContent = `https://ntfy.sh/${topic}`;
+  document.getElementById('ntfyUrlDisplay').textContent = `${ntfyUrl}/${topic}`;
   hideSettings();
   reconnectNtfy();
   showToast('Settings saved ✓', 'success');
@@ -888,7 +905,8 @@ function connectNtfy() {
   if (!config.topic) return;
   if (ntfySource) ntfySource.close();
 
-  const url = `https://ntfy.sh/${config.topic}/sse`;
+  const ntfyBase = (config.ntfyUrl || DEFAULT_NTFY_URL).replace(/\/+$/, '');
+  const url = `${ntfyBase}/${config.topic}/sse`;
   ntfySource = new EventSource(url);
 
   ntfySource.onopen = () => {

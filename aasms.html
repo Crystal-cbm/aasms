@@ -884,28 +884,54 @@ function updateSettingStatus() {
 }
 
 // ── NTFY CONNECTION ──
+let ntfyRetryDelay = 3000;
+let ntfyRetryTimer = null;
+let ntfyHeartbeatTimer = null;
+let ntfyLastEvent = 0;
+
 function connectNtfy() {
   if (!config.topic) return;
-  if (ntfySource) ntfySource.close();
+  if (ntfySource) { ntfySource.close(); ntfySource = null; }
+  clearTimeout(ntfyRetryTimer);
+  clearInterval(ntfyHeartbeatTimer);
+
+  setStatusDot('');
+  updateSettingStatus();
 
   const url = `https://ntfy.sh/${config.topic}/sse`;
   ntfySource = new EventSource(url);
+  ntfyLastEvent = Date.now();
 
   ntfySource.onopen = () => {
+    ntfyRetryDelay = 3000; // reset backoff on success
+    ntfyLastEvent = Date.now();
     setStatusDot('connected');
     updateSettingStatus();
+
+    // Heartbeat — if no event in 60s, reconnect
+    clearInterval(ntfyHeartbeatTimer);
+    ntfyHeartbeatTimer = setInterval(() => {
+      if (Date.now() - ntfyLastEvent > 60000) {
+        console.log('ntfy heartbeat timeout — reconnecting');
+        connectNtfy();
+      }
+    }, 15000);
   };
 
   ntfySource.onerror = () => {
     setStatusDot('error');
     updateSettingStatus();
-    // Auto-reconnect after 15s
-    setTimeout(() => {
-      if (ntfySource.readyState === 2) connectNtfy();
-    }, 15000);
+    clearInterval(ntfyHeartbeatTimer);
+    if (ntfySource) { ntfySource.close(); ntfySource = null; }
+    // Exponential backoff: 3s, 6s, 12s, 24s, max 60s
+    ntfyRetryTimer = setTimeout(() => {
+      ntfyRetryDelay = Math.min(ntfyRetryDelay * 2, 60000);
+      connectNtfy();
+    }, ntfyRetryDelay);
   };
 
   ntfySource.onmessage = (e) => {
+    ntfyLastEvent = Date.now();
     try {
       const data = JSON.parse(e.data);
 
@@ -1026,7 +1052,9 @@ async function sendMessage() {
       ud: text
     });
 
-    const response = await fetch('https://sms.aa.net.uk/sms.cgi', {
+    // Use corsproxy.io to bypass CORS restriction from GitHub Pages
+    const apiUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://sms.aa.net.uk/sms.cgi');
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
@@ -1042,8 +1070,12 @@ async function sendMessage() {
       showToast('Send failed: ' + result.trim(), 'error');
     }
   } catch(err) {
-    msg.status = 'failed';
-    showToast('Network error', 'error');
+    msg.status = 'queued';
+    showToast('Queued — will retry when online', '');
+    // Add to retry queue
+    sendQueue.push({ msgId: msg.id, to: currentThread, text });
+    saveQueue();
+    setTimeout(processSendQueue, 5000);
   }
 
   saveMessages();
@@ -1060,7 +1092,9 @@ async function testConnection() {
       da: config.number,
       ud: 'AA SMS test message'
     });
-    const response = await fetch('https://sms.aa.net.uk/sms.cgi', {
+    // Use corsproxy.io to bypass CORS restriction from GitHub Pages
+    const apiUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://sms.aa.net.uk/sms.cgi');
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString()
@@ -1177,10 +1211,10 @@ function createBubble(msg) {
   const wrap = document.createElement('div');
   const dir = msg.sent ? 'sent' : 'recv';
   const time = new Date(msg.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const statusIcon = msg.status === 'sending' ? ' ·' : msg.status === 'failed' ? ' ✗' : '';
+  const statusIcon = msg.status === 'sending' ? ' ·' : msg.status === 'queued' ? ' ⏳' : msg.status === 'failed' ? ' ✗' : '';
 
   wrap.innerHTML = `
-    <div class="msg-bubble ${dir} ${msg.status === 'sending' ? 'sending' : ''} ${msg.status === 'failed' ? 'failed' : ''}">${escapeHtml(msg.text)}</div>
+    <div class="msg-bubble ${dir} ${msg.status === 'sending' || msg.status === 'queued' ? 'sending' : ''} ${msg.status === 'failed' ? 'failed' : ''}">${escapeHtml(msg.text)}</div>
     <div class="msg-meta ${dir}">${time}${statusIcon}</div>
   `;
   return wrap;
@@ -1199,6 +1233,59 @@ function handleKey(e) {
     sendMessage();
   }
 }
+
+// ── SEND QUEUE ──
+let sendQueue = JSON.parse(localStorage.getItem('aasms_queue') || '[]');
+let queueRunning = false;
+
+function saveQueue() {
+  localStorage.setItem('aasms_queue', JSON.stringify(sendQueue));
+}
+
+async function processSendQueue() {
+  if (queueRunning || sendQueue.length === 0) return;
+  queueRunning = true;
+
+  while (sendQueue.length > 0) {
+    const item = sendQueue[0];
+    try {
+      const params = new URLSearchParams({
+        username: config.number,
+        password: config.password,
+        da: item.to,
+        ud: item.text
+      });
+      const apiUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://sms.aa.net.uk/sms.cgi');
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString()
+      });
+      const result = await response.text();
+      if (result.trim().startsWith('OK')) {
+        // Update message status
+        if (messages[item.to]) {
+          const msg = messages[item.to].find(m => m.id === item.msgId);
+          if (msg) { msg.status = 'sent'; saveMessages(); }
+        }
+        sendQueue.shift();
+        saveQueue();
+        if (currentThread === item.to) renderMessages();
+      } else {
+        // Leave in queue, retry after delay
+        await new Promise(r => setTimeout(r, 10000));
+      }
+    } catch(e) {
+      // Network error — retry after delay
+      await new Promise(r => setTimeout(r, 10000));
+    }
+  }
+  queueRunning = false;
+}
+
+// Process queue on load and when online
+processSendQueue();
+window.addEventListener('online', processSendQueue);
 
 // ── PERSISTENCE ──
 function saveMessages() {

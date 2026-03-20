@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0d0d0d">
+<title>AA SMS</title>
+<link rel="manifest" href="data:application/json,{%22name%22:%22AA+SMS%22,%22short_name%22:%22AA+SMS%22,%22display%22:%22standalone%22,%22background_color%22:%22%230d0d0d%22,%22theme_color%22:%22%230d0d0d%22,%22icons%22:[{%22src%22:%22data:image/svg+xml,%3Csvg+xmlns='http://www.w3.org/2000/svg'+viewBox='0+0+100+100'%3E%3Crect+width='100'+height='100'+rx='20'+fill='%230d0d0d'/%3E%3Ctext+y='.9em'+font-size='80'+x='10'%3E💬%3C/text%3E%3C/svg%3E%22,%22sizes%22:%22any%22,%22type%22:%22image/svg+xml%22}]}">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
+
+:root {
+  --bg: #0d0d0d;
+  --surface: #161616;
+  --surface2: #1e1e1e;
+  --border: #2a2a2a;
+  --accent: #e8ff6b;
+  --accent-dim: rgba(232,255,107,0.08);
+  --accent-mid: rgba(232,255,107,0.15);
+  --text: #d4d4d4;
+  --text-bright: #f0f0f0;
+  --text-dim: #5a5a5a;
+  --sent: #1a2a00;
+  --sent-border: #3a5a00;
+  --recv: #1e1e1e;
+  --recv-border: #2a2a2a;
+  --danger: #ff4444;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ── SCREENS ── */
+.screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  transition: transform 0.28s cubic-bezier(0.4,0,0.2,1), opacity 0.28s;
+}
+.screen.hidden { transform: translateX(100%); opacity: 0; pointer-events: none; }
+.screen.slide-left { transform: translateX(-30%); opacity: 0; pointer-events: none; }
+
+/* ── SETUP SCREEN ── */
+#setupScreen {
+  justify-content: center;
+  align-items: center;
+  padding: 32px 24px;
+  gap: 0;
+}
+
+.setup-logo {
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--accent);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.setup-title {
+  font-size: 26px;
+  font-weight: 600;
+  color: var(--text-bright);
+  margin-bottom: 6px;
+  text-align: center;
+}
+
+.setup-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-bottom: 36px;
+  line-height: 1.6;
+}
+
+.setup-form {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.field-input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-bright);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  padding: 12px 14px;
+  outline: none;
+  transition: border-color 0.15s;
+  width: 100%;
+}
+.field-input:focus { border-color: var(--accent); }
+.field-input::placeholder { color: var(--text-dim); }
+
+.field-hint {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+.setup-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+}
+.setup-divider-line { flex: 1; height: 1px; background: var(--border); }
+.setup-divider-text { font-size: 11px; color: var(--text-dim); font-family: 'DM Mono', monospace; }
+
+.btn {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 13px 20px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-align: center;
+}
+.btn-primary { background: var(--accent); color: #000; }
+.btn-primary:active { background: #d4e860; transform: scale(0.98); }
+.btn-secondary { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:active { background: var(--surface2); }
+.btn-danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+.btn-icon {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-dim);
+  padding: 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, background 0.15s;
+}
+.btn-icon:active { color: var(--text-bright); background: var(--surface2); }
+
+/* ── TOPBAR ── */
+.topbar {
+  display: flex;
+  align-items: center;
+  padding: calc(var(--safe-top) + 12px) 16px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  gap: 10px;
+  flex-shrink: 0;
+  min-height: 56px;
+}
+
+.topbar-title {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-bright);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbar-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: 'DM Mono', monospace;
+}
+
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  flex-shrink: 0;
+  transition: background 0.3s;
+}
+.status-dot.connected { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+.status-dot.error { background: var(--danger); }
+
+/* ── THREAD LIST ── */
+#threadScreen { background: var(--bg); }
+
+.thread-list {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.thread-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  padding: 40px;
+  text-align: center;
+}
+.thread-empty-icon { font-size: 48px; opacity: 0.3; }
+.thread-empty-text { font-size: 14px; color: var(--text-dim); line-height: 1.6; }
+
+.thread-item {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.12s;
+  position: relative;
+}
+.thread-item:active { background: var(--surface); }
+
+.thread-avatar {
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  background: var(--surface2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  color: var(--accent);
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+.thread-info { flex: 1; overflow: hidden; }
+
+.thread-number {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-bright);
+  margin-bottom: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-preview {
+  font-size: 12px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thread-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.thread-time {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+}
+
+.thread-badge {
+  background: var(--accent);
+  color: #000;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 5px;
+}
+
+/* ── FAB ── */
+.fab {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + 20px);
+  right: 20px;
+  width: 54px; height: 54px;
+  border-radius: 27px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 20px rgba(232,255,107,0.3);
+  font-size: 22px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  z-index: 10;
+}
+.fab:active { transform: scale(0.92); box-shadow: 0 2px 10px rgba(232,255,107,0.2); }
+
+/* ── CHAT SCREEN ── */
+#chatScreen { background: var(--bg); }
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.msg-group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.msg-bubble {
+  max-width: 78%;
+  padding: 10px 14px;
+  border-radius: 16px;
+  font-size: 14px;
+  line-height: 1.5;
+  animation: bubbleIn 0.2s ease;
+  position: relative;
+  word-break: break-word;
+}
+
+@keyframes bubbleIn {
+  from { opacity: 0; transform: scale(0.92) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.msg-bubble.sent {
+  background: var(--sent);
+  border: 1px solid var(--sent-border);
+  border-bottom-right-radius: 4px;
+  align-self: flex-end;
+  color: #c8e870;
+}
+
+.msg-bubble.recv {
+  background: var(--recv);
+  border: 1px solid var(--recv-border);
+  border-bottom-left-radius: 4px;
+  align-self: flex-start;
+  color: var(--text-bright);
+}
+
+.msg-bubble.sending { opacity: 0.6; }
+.msg-bubble.failed { border-color: var(--danger); }
+
+.msg-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 9px;
+  color: var(--text-dim);
+  margin-top: 2px;
+}
+.msg-meta.sent { text-align: right; padding-right: 4px; }
+.msg-meta.recv { padding-left: 4px; }
+
+.date-divider {
+  text-align: center;
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  margin: 10px 0;
+  letter-spacing: 0.05em;
+}
+
+/* ── COMPOSE ── */
+.compose-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 10px 16px calc(var(--safe-bottom) + 10px);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.compose-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-bright);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  padding: 10px 16px;
+  outline: none;
+  resize: none;
+  max-height: 120px;
+  overflow-y: auto;
+  line-height: 1.4;
+  transition: border-color 0.15s;
+}
+.compose-input:focus { border-color: var(--accent); }
+.compose-input::placeholder { color: var(--text-dim); }
+
+.send-btn {
+  width: 40px; height: 40px;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.15s, opacity 0.15s;
+  font-size: 16px;
+}
+.send-btn:disabled { opacity: 0.3; }
+.send-btn:not(:disabled):active { transform: scale(0.88); }
+
+/* ── NEW CHAT MODAL ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  transition: opacity 0.25s;
+}
+.modal-overlay.hidden { opacity: 0; pointer-events: none; }
+
+.modal-sheet {
+  background: var(--surface);
+  border-radius: 20px 20px 0 0;
+  padding: 20px 20px calc(var(--safe-bottom) + 20px);
+  width: 100%;
+  border-top: 1px solid var(--border);
+  transform: translateY(0);
+  transition: transform 0.25s cubic-bezier(0.4,0,0.2,1);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.modal-overlay.hidden .modal-sheet { transform: translateY(100%); }
+
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-bright);
+}
+
+/* ── SETTINGS ── */
+#settingsScreen { overflow-y: auto; }
+
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.settings-section-title {
+  font-family: 'DM Mono', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.settings-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.settings-row:last-child { border-bottom: none; }
+
+.settings-row-label {
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 0.05em;
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.settings-row-value {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-bright);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-bright);
+  font-family: 'DM Mono', monospace;
+  font-size: 13px;
+  outline: none;
+  width: 100%;
+}
+.settings-input::placeholder { color: var(--text-dim); }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed;
+  bottom: calc(var(--safe-bottom) + 80px);
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 10px 18px;
+  border-radius: 20px;
+  font-size: 13px;
+  z-index: 200;
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  pointer-events: none;
+  white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.toast.success { border-color: var(--accent); color: var(--accent); }
+.toast.error { border-color: var(--danger); color: var(--danger); }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 3px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN -->
+<div class="screen" id="setupScreen">
+  <div class="setup-logo">AA SMS</div>
+  <div class="setup-title">Private Messaging</div>
+  <div class="setup-sub">Enter your aa.net.uk VoIP details<br>to get started</div>
+
+  <div class="setup-form">
+    <div class="field-group">
+      <div class="field-label">Your VoIP Number</div>
+      <input class="field-input" id="setupNumber" type="tel" placeholder="+441234567890" autocomplete="off">
+      <div class="field-hint">Full international format as shown in aa.net control panel</div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">Outgoing SMS Password</div>
+      <input class="field-input" id="setupPassword" type="password" placeholder="Your SMS sending password" autocomplete="off">
+      <div class="field-hint">Set in aa.net control panel under your VoIP number</div>
+    </div>
+
+    <div class="setup-divider">
+      <div class="setup-divider-line"></div>
+      <div class="setup-divider-text">Inbound SMS</div>
+      <div class="setup-divider-line"></div>
+    </div>
+
+    <div class="field-group">
+      <div class="field-label">ntfy Topic</div>
+      <input class="field-input" id="setupTopic" type="text" placeholder="e.g. aasms-myname-a3k9" autocomplete="off">
+      <div class="field-hint">Choose a private random topic name. In aa.net control pages → your VoIP number → SMS Inbound, enter: <strong>https://ntfy.sh/[your-topic]</strong></div>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveSetup()">Save & Start →</button>
+  </div>
+</div>
+
+<!-- THREAD LIST SCREEN -->
+<div class="screen hidden" id="threadScreen">
+  <div class="topbar">
+    <div style="display:flex;flex-direction:column;flex:1;overflow:hidden">
+      <div class="topbar-title">AA SMS</div>
+      <div class="topbar-sub" id="myNumber" style="font-size:10px"></div>
+    </div>
+    <div class="status-dot" id="statusDot" title="Inbound connection"></div>
+    <button class="btn-icon" onclick="showSettings()" title="Settings">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    </button>
+  </div>
+
+  <div class="thread-list" id="threadList">
+    <div class="thread-empty" id="threadEmpty">
+      <div class="thread-empty-icon">💬</div>
+      <div class="thread-empty-text">No messages yet.<br>Tap + to start a conversation.</div>
+    </div>
+  </div>
+
+  <button class="fab" onclick="showNewChat()">+</button>
+</div>
+
+<!-- CHAT SCREEN -->
+<div class="screen hidden" id="chatScreen">
+  <div class="topbar">
+    <button class="btn-icon" onclick="backToThreads()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div style="flex:1;overflow:hidden">
+      <div class="topbar-title" id="chatTitle"></div>
+    </div>
+    <button class="btn-icon" onclick="deleteThread()" title="Delete conversation">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+    </button>
+  </div>
+
+  <div class="chat-messages" id="chatMessages"></div>
+
+  <div class="compose-bar">
+    <textarea class="compose-input" id="composeInput" placeholder="Message..." rows="1"
+      oninput="autoResize(this)" onkeydown="handleKey(event)"></textarea>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()" disabled>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21L23 12 2 3v7l15 2-15 2v7z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- SETTINGS SCREEN -->
+<div class="screen hidden" id="settingsScreen">
+  <div class="topbar">
+    <button class="btn-icon" onclick="hideSettings()">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <div class="topbar-title">Settings</div>
+  </div>
+
+  <div class="settings-body">
+    <div>
+      <div class="settings-section-title">Account</div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-label">Number</div>
+          <input class="settings-input" id="settingNumber" type="tel" placeholder="+441234567890">
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Password</div>
+          <input class="settings-input" id="settingPassword" type="password" placeholder="SMS sending password">
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">ntfy Topic</div>
+          <input class="settings-input" id="settingTopic" type="text" placeholder="your-ntfy-topic">
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="settings-section-title">ntfy Setup Help</div>
+      <div class="settings-card">
+        <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:8px">
+          <div style="font-size:12px;color:var(--text);line-height:1.7">
+            In your <strong style="color:var(--text-bright)">aa.net control panel</strong> → VoIP number → SMS Inbound, enter your ntfy URL as the inbound target:<br><br>
+            <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);background:var(--accent-dim);padding:6px 10px;border-radius:6px;display:block;word-break:break-all" id="ntfyUrlDisplay">https://ntfy.sh/your-topic</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="settings-section-title">Connection</div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-label">Status</div>
+          <div class="settings-row-value" id="settingStatus">—</div>
+        </div>
+        <div class="settings-row" style="gap:10px">
+          <button class="btn btn-secondary" style="flex:1;font-size:13px;padding:10px" onclick="testConnection()">Test Outbound</button>
+          <button class="btn btn-secondary" style="flex:1;font-size:13px;padding:10px" onclick="reconnectNtfy()">Reconnect</button>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="settings-section-title">Notifications</div>
+      <div class="settings-card">
+        <div class="settings-row">
+          <div class="settings-row-label">Status</div>
+          <div class="settings-row-value" id="notifStatus">Off</div>
+        </div>
+        <div class="settings-row">
+          <button class="btn btn-secondary" id="notifBtn" style="flex:1;font-size:13px;padding:10px" onclick="enableNotifications()">Enable</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-primary" onclick="saveSettings()">Save Changes</button>
+    <button class="btn btn-danger" onclick="resetApp()">Reset & Clear All Data</button>
+  </div>
+</div>
+
+<!-- NEW CHAT MODAL -->
+<div class="modal-overlay hidden" id="newChatModal">
+  <div class="modal-sheet">
+    <div class="modal-title">New Message</div>
+    <div class="field-group">
+      <div class="field-label">To (phone number)</div>
+      <input class="field-input" id="newChatNumber" type="tel" placeholder="+447700900000" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" onclick="startNewChat()">Start Conversation</button>
+    <button class="btn btn-secondary" onclick="hideNewChat()">Cancel</button>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ── STATE ──
+let config = {};
+let messages = {}; // { number: [{id,from,to,text,ts,sent,status}] }
+let currentThread = null;
+let ntfySource = null;
+let unread = {}; // { number: count }
+
+// ── INIT ──
+function init() {
+  config = JSON.parse(localStorage.getItem('aasms_config') || '{}');
+  messages = JSON.parse(localStorage.getItem('aasms_messages') || '{}');
+  unread = JSON.parse(localStorage.getItem('aasms_unread') || '{}');
+
+  if (config.number && config.password && config.topic) {
+    showScreen('threadScreen');
+    document.getElementById('myNumber').textContent = config.number;
+    renderThreads();
+    connectNtfy();
+  } else {
+    showScreen('setupScreen');
+  }
+}
+
+// ── SCREENS ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => {
+    s.classList.add('hidden');
+    s.classList.remove('slide-left');
+  });
+  document.getElementById(id).classList.remove('hidden');
+}
+
+function showChat(number) {
+  currentThread = number;
+  unread[number] = 0;
+  saveUnread();
+  document.getElementById('chatTitle').textContent = number;
+  renderMessages();
+  document.getElementById('threadScreen').classList.add('slide-left');
+  document.getElementById('chatScreen').classList.remove('hidden');
+  setTimeout(() => {
+    const msgs = document.getElementById('chatMessages');
+    msgs.scrollTop = msgs.scrollHeight;
+  }, 50);
+}
+
+function backToThreads() {
+  document.getElementById('threadScreen').classList.remove('slide-left', 'hidden');
+  document.getElementById('chatScreen').classList.add('hidden');
+  currentThread = null;
+  renderThreads();
+}
+
+function showSettings() {
+  document.getElementById('settingNumber').value = config.number || '';
+  document.getElementById('settingPassword').value = config.password || '';
+  document.getElementById('settingTopic').value = config.topic || '';
+  document.getElementById('ntfyUrlDisplay').textContent = config.topic ? `https://ntfy.sh/${config.topic}` : 'https://ntfy.sh/your-topic';
+  updateSettingStatus();
+  updateNotifButton();
+  document.getElementById('settingsScreen').classList.remove('hidden');
+}
+
+function hideSettings() {
+  document.getElementById('settingsScreen').classList.add('hidden');
+}
+
+function showNewChat() {
+  document.getElementById('newChatNumber').value = '';
+  document.getElementById('newChatModal').classList.remove('hidden');
+  setTimeout(() => document.getElementById('newChatNumber').focus(), 100);
+}
+
+function hideNewChat() {
+  document.getElementById('newChatModal').classList.add('hidden');
+}
+
+// ── SETUP ──
+function saveSetup() {
+  const number = document.getElementById('setupNumber').value.trim();
+  const password = document.getElementById('setupPassword').value.trim();
+  const topic = document.getElementById('setupTopic').value.trim().replace(/^https?:\/\/ntfy\.sh\//,'');
+
+  if (!number || !password || !topic) {
+    showToast('Please fill in all fields', 'error');
+    return;
+  }
+
+  config = { number, password, topic };
+  localStorage.setItem('aasms_config', JSON.stringify(config));
+  document.getElementById('myNumber').textContent = number;
+  showScreen('threadScreen');
+  renderThreads();
+  connectNtfy();
+  showToast('Setup complete ✓', 'success');
+}
+
+// ── SETTINGS ──
+function saveSettings() {
+  const number = document.getElementById('settingNumber').value.trim();
+  const password = document.getElementById('settingPassword').value.trim();
+  const topic = document.getElementById('settingTopic').value.trim().replace(/^https?:\/\/ntfy\.sh\//,'');
+
+  if (!number || !password || !topic) {
+    showToast('Please fill in all fields', 'error');
+    return;
+  }
+
+  config = { number, password, topic };
+  localStorage.setItem('aasms_config', JSON.stringify(config));
+  document.getElementById('myNumber').textContent = number;
+  document.getElementById('ntfyUrlDisplay').textContent = `https://ntfy.sh/${topic}`;
+  hideSettings();
+  reconnectNtfy();
+  showToast('Settings saved ✓', 'success');
+}
+
+function resetApp() {
+  if (!confirm('Delete all messages and settings?')) return;
+  localStorage.clear();
+  location.reload();
+}
+
+function updateSettingStatus() {
+  const el = document.getElementById('settingStatus');
+  if (!ntfySource) {
+    el.textContent = 'Disconnected';
+    el.style.color = 'var(--danger)';
+  } else if (ntfySource.readyState === 1) {
+    el.textContent = 'Connected to ntfy';
+    el.style.color = 'var(--accent)';
+  } else {
+    el.textContent = 'Connecting...';
+    el.style.color = 'var(--text-dim)';
+  }
+}
+
+// ── NTFY CONNECTION ──
+function connectNtfy() {
+  if (!config.topic) return;
+  if (ntfySource) ntfySource.close();
+
+  const url = `https://ntfy.sh/${config.topic}/sse`;
+  ntfySource = new EventSource(url);
+
+  ntfySource.onopen = () => {
+    setStatusDot('connected');
+    updateSettingStatus();
+  };
+
+  ntfySource.onerror = () => {
+    setStatusDot('error');
+    updateSettingStatus();
+    // Auto-reconnect after 15s
+    setTimeout(() => {
+      if (ntfySource.readyState === 2) connectNtfy();
+    }, 15000);
+  };
+
+  ntfySource.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+
+      // ntfy event types: 'open' and 'keepalive' have no message — skip them
+      if (data.event === 'open' || data.event === 'keepalive') return;
+
+      // aa.net POSTs URL-encoded form data to ntfy as the message body
+      // e.g. scts=...&oa=%2B447...&da=%2B447...&ud=Hello+Sir&
+      const body = data.message || '';
+
+      let from = 'Unknown';
+      let text = body;
+      let ts = new Date(data.time ? data.time * 1000 : Date.now());
+
+      if (body.includes('oa=') || body.includes('ud=')) {
+        // URLSearchParams handles %2B → + and + → space correctly
+        const params = new URLSearchParams(body);
+        if (params.get('oa')) from = params.get('oa');
+        if (params.get('ud')) text = params.get('ud');
+        if (params.get('scts')) {
+          const parsed = new Date(params.get('scts'));
+          if (!isNaN(parsed)) ts = parsed;
+        }
+      }
+
+      if (!text || text === body && !body.includes('ud=')) return; // skip non-SMS events
+
+      receiveMessage(from, text, ts);
+    } catch(err) {
+      console.warn('ntfy parse error', err, e.data);
+    }
+  };
+}
+
+function reconnectNtfy() {
+  connectNtfy();
+  showToast('Reconnecting...', '');
+}
+
+function setStatusDot(state) {
+  const dot = document.getElementById('statusDot');
+  dot.className = 'status-dot' + (state ? ' ' + state : '');
+}
+
+// ── MESSAGES ──
+function receiveMessage(from, text, ts) {
+  const number = normaliseNumber(from);
+  if (!messages[number]) messages[number] = [];
+
+  const msg = {
+    id: Date.now() + Math.random(),
+    from: number,
+    to: config.number,
+    text,
+    ts: ts.toISOString(),
+    sent: false,
+    status: 'received'
+  };
+
+  messages[number].push(msg);
+  saveMessages();
+
+  if (currentThread === number) {
+    appendMessageBubble(msg);
+    const msgs = document.getElementById('chatMessages');
+    msgs.scrollTop = msgs.scrollHeight;
+  } else {
+    unread[number] = (unread[number] || 0) + 1;
+    saveUnread();
+    renderThreads();
+    showToast(`New message from ${number}`, 'success');
+  }
+
+  // Browser notification — only if enabled and not currently viewing this thread
+  if (notificationsEnabled() && currentThread !== number) {
+    const n = new Notification(number, {
+      body: text.substring(0, 100),
+      tag: number, // Collapses multiple from same sender
+      renotify: true,
+      silent: false
+    });
+    n.onclick = () => { window.focus(); showChat(number); n.close(); };
+  }
+}
+
+async function sendMessage() {
+  const input = document.getElementById('composeInput');
+  const text = input.value.trim();
+  if (!text || !currentThread) return;
+
+  input.value = '';
+  autoResize(input);
+  document.getElementById('sendBtn').disabled = true;
+
+  const msg = {
+    id: Date.now() + Math.random(),
+    from: config.number,
+    to: currentThread,
+    text,
+    ts: new Date().toISOString(),
+    sent: true,
+    status: 'sending'
+  };
+
+  if (!messages[currentThread]) messages[currentThread] = [];
+  messages[currentThread].push(msg);
+  saveMessages();
+  appendMessageBubble(msg);
+
+  const msgs = document.getElementById('chatMessages');
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const params = new URLSearchParams({
+      username: config.number,
+      password: config.password,
+      da: currentThread,
+      ud: text
+    });
+
+    const response = await fetch('https://sms.aa.net.uk/sms.cgi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+
+    const result = await response.text();
+
+    if (result.trim().startsWith('OK')) {
+      msg.status = 'sent';
+      showToast('Sent ✓', 'success');
+    } else {
+      msg.status = 'failed';
+      showToast('Send failed: ' + result.trim(), 'error');
+    }
+  } catch(err) {
+    msg.status = 'failed';
+    showToast('Network error', 'error');
+  }
+
+  saveMessages();
+  // Re-render to update status
+  renderMessages();
+}
+
+async function testConnection() {
+  showToast('Testing...', '');
+  try {
+    const params = new URLSearchParams({
+      username: config.number,
+      password: config.password,
+      da: config.number,
+      ud: 'AA SMS test message'
+    });
+    const response = await fetch('https://sms.aa.net.uk/sms.cgi', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    });
+    const result = await response.text();
+    if (result.trim().startsWith('OK')) {
+      showToast('Connection OK ✓', 'success');
+    } else {
+      showToast('Error: ' + result.trim(), 'error');
+    }
+  } catch(err) {
+    showToast('Network error', 'error');
+  }
+}
+
+// ── NEW CHAT ──
+function startNewChat() {
+  const raw = document.getElementById('newChatNumber').value.trim();
+  if (!raw) return;
+  const number = normaliseNumber(raw);
+  hideNewChat();
+  if (!messages[number]) messages[number] = [];
+  saveMessages();
+  renderThreads();
+  showChat(number);
+}
+
+function deleteThread() {
+  if (!currentThread) return;
+  if (!confirm(`Delete conversation with ${currentThread}?`)) return;
+  delete messages[currentThread];
+  delete unread[currentThread];
+  saveMessages();
+  saveUnread();
+  backToThreads();
+}
+
+// ── RENDER ──
+function renderThreads() {
+  const list = document.getElementById('threadList');
+  const empty = document.getElementById('threadEmpty');
+  const numbers = Object.keys(messages);
+
+  if (numbers.length === 0) {
+    empty.style.display = 'flex';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Sort by latest message
+  numbers.sort((a, b) => {
+    const ma = messages[a], mb = messages[b];
+    const ta = ma.length ? new Date(ma[ma.length-1].ts) : 0;
+    const tb = mb.length ? new Date(mb[mb.length-1].ts) : 0;
+    return tb - ta;
+  });
+
+  list.innerHTML = '';
+  numbers.forEach(number => {
+    const msgs = messages[number];
+    const last = msgs[msgs.length - 1];
+    const badge = unread[number] || 0;
+    const initials = number.slice(-2);
+    const timeStr = last ? formatTime(new Date(last.ts)) : '';
+    const preview = last ? (last.sent ? '→ ' : '') + last.text : 'No messages';
+
+    const item = document.createElement('div');
+    item.className = 'thread-item';
+    item.innerHTML = `
+      <div class="thread-avatar">${initials}</div>
+      <div class="thread-info">
+        <div class="thread-number">${number}</div>
+        <div class="thread-preview">${escapeHtml(preview.substring(0,60))}</div>
+      </div>
+      <div class="thread-meta">
+        <div class="thread-time">${timeStr}</div>
+        ${badge ? `<div class="thread-badge">${badge}</div>` : ''}
+      </div>
+    `;
+    item.addEventListener('click', () => showChat(number));
+    list.appendChild(item);
+  });
+}
+
+function renderMessages() {
+  const container = document.getElementById('chatMessages');
+  if (!currentThread || !messages[currentThread]) return;
+  container.innerHTML = '';
+
+  const msgs = messages[currentThread];
+  let lastDate = '';
+
+  msgs.forEach(msg => {
+    const date = new Date(msg.ts).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
+    if (date !== lastDate) {
+      const div = document.createElement('div');
+      div.className = 'date-divider';
+      div.textContent = date;
+      container.appendChild(div);
+      lastDate = date;
+    }
+    container.appendChild(createBubble(msg));
+  });
+
+  container.scrollTop = container.scrollHeight;
+}
+
+function appendMessageBubble(msg) {
+  const container = document.getElementById('chatMessages');
+  container.appendChild(createBubble(msg));
+}
+
+function createBubble(msg) {
+  const wrap = document.createElement('div');
+  const dir = msg.sent ? 'sent' : 'recv';
+  const time = new Date(msg.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const statusIcon = msg.status === 'sending' ? ' ·' : msg.status === 'failed' ? ' ✗' : '';
+
+  wrap.innerHTML = `
+    <div class="msg-bubble ${dir} ${msg.status === 'sending' ? 'sending' : ''} ${msg.status === 'failed' ? 'failed' : ''}">${escapeHtml(msg.text)}</div>
+    <div class="msg-meta ${dir}">${time}${statusIcon}</div>
+  `;
+  return wrap;
+}
+
+// ── COMPOSE ──
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  document.getElementById('sendBtn').disabled = !el.value.trim();
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
+
+// ── PERSISTENCE ──
+function saveMessages() {
+  localStorage.setItem('aasms_messages', JSON.stringify(messages));
+}
+function saveUnread() {
+  localStorage.setItem('aasms_unread', JSON.stringify(unread));
+}
+
+// ── HELPERS ──
+function normaliseNumber(n) {
+  n = n.trim().replace(/\s/g,'');
+  if (n.startsWith('07')) n = '+44' + n.slice(1);
+  if (n.startsWith('00')) n = '+' + n.slice(2);
+  return n;
+}
+
+function formatTime(date) {
+  const now = new Date();
+  const diff = now - date;
+  if (diff < 60000) return 'now';
+  if (diff < 3600000) return Math.floor(diff/60000) + 'm';
+  if (diff < 86400000) return date.toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  return date.toLocaleDateString('en-GB', { day:'numeric', month:'short' });
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+let toastTimer;
+function showToast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type ? ' ' + type : '');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+
+// ── NOTIFICATIONS ──
+function notificationsEnabled() {
+  return localStorage.getItem('aasms_notif') === 'true' && Notification.permission === 'granted';
+}
+
+async function enableNotifications() {
+  if (!('Notification' in window)) {
+    showToast('Notifications not supported', 'error');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    localStorage.setItem('aasms_notif', 'true');
+    updateNotifButton();
+    showToast('Notifications enabled ✓', 'success');
+    return;
+  }
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') {
+    localStorage.setItem('aasms_notif', 'true');
+    updateNotifButton();
+    showToast('Notifications enabled ✓', 'success');
+  } else {
+    showToast('Permission denied — enable in browser settings', 'error');
+  }
+}
+
+function disableNotifications() {
+  localStorage.setItem('aasms_notif', 'false');
+  updateNotifButton();
+  showToast('Notifications disabled', '');
+}
+
+function updateNotifButton() {
+  const btn = document.getElementById('notifBtn');
+  const status = document.getElementById('notifStatus');
+  if (!btn) return;
+  const enabled = notificationsEnabled();
+  btn.textContent = enabled ? 'Disable' : 'Enable';
+  btn.className = enabled ? 'btn btn-danger' : 'btn btn-secondary';
+  btn.onclick = enabled ? disableNotifications : enableNotifications;
+  if (status) {
+    status.textContent = enabled ? 'On' : Notification.permission === 'denied' ? 'Blocked by browser' : 'Off';
+    status.style.color = enabled ? 'var(--accent)' : 'var(--text-dim)';
+  }
+}
+
+// ── START ──
+init();
+</script>
+</body>
+</html>

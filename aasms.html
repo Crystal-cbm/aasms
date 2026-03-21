@@ -641,6 +641,9 @@ html, body {
     <div style="flex:1;overflow:hidden">
       <div class="topbar-title" id="chatTitle"></div>
     </div>
+    <button class="btn-icon" onclick="editContactName()" title="Set contact name">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 14.66V20a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h5.34"/><polygon points="18 2 22 6 12 16 8 16 8 12 18 2"/></svg>
+    </button>
     <button class="btn-icon" onclick="deleteThread()" title="Delete conversation">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
     </button>
@@ -749,6 +752,7 @@ html, body {
 // ── STATE ──
 let config = {};
 let messages = {}; // { number: [{id,from,to,text,ts,sent,status}] }
+let contacts = {}; // { number: name }
 let currentThread = null;
 let ntfySource = null;
 let unread = {}; // { number: count }
@@ -758,6 +762,7 @@ function init() {
   config = JSON.parse(localStorage.getItem('aasms_config') || '{}');
   messages = JSON.parse(localStorage.getItem('aasms_messages') || '{}');
   unread = JSON.parse(localStorage.getItem('aasms_unread') || '{}');
+  contacts = JSON.parse(localStorage.getItem('aasms_contacts') || '{}');
 
   if (config.number && config.password && config.topic) {
     showScreen('threadScreen');
@@ -782,7 +787,7 @@ function showChat(number) {
   currentThread = number;
   unread[number] = 0;
   saveUnread();
-  document.getElementById('chatTitle').textContent = number;
+  document.getElementById('chatTitle').textContent = getDisplayName(number);
   renderMessages();
   document.getElementById('threadScreen').classList.add('slide-left');
   document.getElementById('chatScreen').classList.remove('hidden');
@@ -899,8 +904,8 @@ function connectNtfy() {
   setStatusDot('');
   updateSettingStatus();
 
-  // Use since= to fetch any messages missed during disconnect
-  const since = ntfyLastMessageTime > 0 ? ntfyLastMessageTime : 'all';
+  // Use since= to catch up on missed messages. Default to 24h ago on first load.
+  const since = ntfyLastMessageTime > 0 ? ntfyLastMessageTime : Math.floor(Date.now()/1000) - 86400;
   const url = `https://ntfy.sh/${config.topic}/sse?since=${since}&poll=0`;
   ntfySource = new EventSource(url);
   ntfyLastEvent = Date.now();
@@ -967,7 +972,7 @@ function connectNtfy() {
 
       if (!text || text === body && !body.includes('ud=')) return; // skip non-SMS events
 
-      receiveMessage(from, text, ts);
+      receiveMessage(from, text, ts, data.id);
     } catch(err) {
       console.warn('ntfy parse error', err, e.data);
     }
@@ -985,12 +990,19 @@ function setStatusDot(state) {
 }
 
 // ── MESSAGES ──
-function receiveMessage(from, text, ts) {
+function receiveMessage(from, text, ts, ntfyId) {
   const number = normaliseNumber(from);
   if (!messages[number]) messages[number] = [];
 
+  // Deduplicate using ntfy message ID to avoid replaying already-received messages
+  if (ntfyId) {
+    const seen = messages[number].some(m => m.ntfyId === ntfyId);
+    if (seen) return;
+  }
+
   const msg = {
     id: Date.now() + Math.random(),
+    ntfyId: ntfyId || null,
     from: number,
     to: config.number,
     text,
@@ -1099,162 +1111,46 @@ async function sendMessage() {
 }
 
 async function testConnection() {
-  showToast('Testing...', '');
+  showToast('Testing outbound...', '');
   try {
     const params = new URLSearchParams({
       username: config.number,
       password: config.password,
       da: config.number,
-      ud: 'AA SMS test message'
+      ud: 'AA SMS test ' + new Date().toLocaleTimeString()
     });
-    // Use corsproxy.io to bypass CORS restriction from GitHub Pages
-    const apiUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://sms.aa.net.uk/sms.cgi');
-    const response = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString()
-    });
-    const result = await response.text();
-    if (result.trim().startsWith('OK')) {
-      showToast('Connection OK ✓', 'success');
+    let result = '';
+    try {
+      // Try direct first
+      const r = await fetch('https://sms.aa.net.uk/sms.cgi', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+        signal: AbortSignal.timeout(8000)
+      });
+      result = await r.text();
+    } catch(e) {
+      // CORS blocked — use proxy
+      const apiUrl = 'https://corsproxy.io/?' + encodeURIComponent('https://sms.aa.net.uk/sms.cgi');
+      const r2 = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+        signal: AbortSignal.timeout(12000)
+      });
+      result = await r2.text();
+    }
+    if (result.includes('OK')) {
+      showToast('Sent ✓ — check your messages', 'success');
+    } else if (result.includes('ERR')) {
+      const err = result.split('\n').find(l => l.includes('ERR')) || result;
+      showToast(err.trim().substring(0, 80), 'error');
     } else {
-      showToast('Error: ' + result.trim(), 'error');
+      showToast('Response: ' + result.trim().substring(0, 60), '');
     }
   } catch(err) {
-    showToast('Network error', 'error');
+    showToast('Failed: ' + err.message, 'error');
   }
-}
-
-// ── NEW CHAT ──
-function startNewChat() {
-  const raw = document.getElementById('newChatNumber').value.trim();
-  if (!raw) return;
-  const number = normaliseNumber(raw);
-  hideNewChat();
-  if (!messages[number]) messages[number] = [];
-  saveMessages();
-  renderThreads();
-  showChat(number);
-}
-
-function deleteThread() {
-  if (!currentThread) return;
-  if (!confirm(`Delete conversation with ${currentThread}?`)) return;
-  delete messages[currentThread];
-  delete unread[currentThread];
-  saveMessages();
-  saveUnread();
-  backToThreads();
-}
-
-// ── RENDER ──
-function renderThreads() {
-  const list = document.getElementById('threadList');
-  const empty = document.getElementById('threadEmpty');
-  const numbers = Object.keys(messages);
-
-  if (numbers.length === 0) {
-    empty.style.display = 'flex';
-    return;
-  }
-  empty.style.display = 'none';
-
-  // Sort by latest message
-  numbers.sort((a, b) => {
-    const ma = messages[a], mb = messages[b];
-    const ta = ma.length ? new Date(ma[ma.length-1].ts) : 0;
-    const tb = mb.length ? new Date(mb[mb.length-1].ts) : 0;
-    return tb - ta;
-  });
-
-  list.innerHTML = '';
-  numbers.forEach(number => {
-    const msgs = messages[number];
-    const last = msgs[msgs.length - 1];
-    const badge = unread[number] || 0;
-    const initials = number.slice(-2);
-    const timeStr = last ? formatTime(new Date(last.ts)) : '';
-    const preview = last ? (last.sent ? '→ ' : '') + last.text : 'No messages';
-
-    const item = document.createElement('div');
-    item.className = 'thread-item';
-    item.innerHTML = `
-      <div class="thread-avatar">${initials}</div>
-      <div class="thread-info">
-        <div class="thread-number">${number}</div>
-        <div class="thread-preview">${escapeHtml(preview.substring(0,60))}</div>
-      </div>
-      <div class="thread-meta">
-        <div class="thread-time">${timeStr}</div>
-        ${badge ? `<div class="thread-badge">${badge}</div>` : ''}
-      </div>
-    `;
-    item.addEventListener('click', () => showChat(number));
-    list.appendChild(item);
-  });
-}
-
-function renderMessages() {
-  const container = document.getElementById('chatMessages');
-  if (!currentThread || !messages[currentThread]) return;
-  container.innerHTML = '';
-
-  const msgs = messages[currentThread];
-  let lastDate = '';
-
-  msgs.forEach(msg => {
-    const date = new Date(msg.ts).toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short' });
-    if (date !== lastDate) {
-      const div = document.createElement('div');
-      div.className = 'date-divider';
-      div.textContent = date;
-      container.appendChild(div);
-      lastDate = date;
-    }
-    container.appendChild(createBubble(msg));
-  });
-
-  container.scrollTop = container.scrollHeight;
-}
-
-function appendMessageBubble(msg) {
-  const container = document.getElementById('chatMessages');
-  container.appendChild(createBubble(msg));
-}
-
-function createBubble(msg) {
-  const wrap = document.createElement('div');
-  const dir = msg.sent ? 'sent' : 'recv';
-  const time = new Date(msg.ts).toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
-  const statusIcon = msg.status === 'sending' ? ' ·' : msg.status === 'queued' ? ' ⏳' : msg.status === 'failed' ? ' ✗' : '';
-
-  wrap.innerHTML = `
-    <div class="msg-bubble ${dir} ${msg.status === 'sending' || msg.status === 'queued' ? 'sending' : ''} ${msg.status === 'failed' ? 'failed' : ''}">${escapeHtml(msg.text)}</div>
-    <div class="msg-meta ${dir}">${time}${statusIcon}</div>
-  `;
-  return wrap;
-}
-
-// ── COMPOSE ──
-function autoResize(el) {
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
-  document.getElementById('sendBtn').disabled = !el.value.trim();
-}
-
-function handleKey(e) {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
-    sendMessage();
-  }
-}
-
-// ── SEND QUEUE ──
-let sendQueue = JSON.parse(localStorage.getItem('aasms_queue') || '[]');
-let queueRunning = false;
-
-function saveQueue() {
-  localStorage.setItem('aasms_queue', JSON.stringify(sendQueue));
 }
 
 async function processSendQueue() {
@@ -1308,6 +1204,24 @@ function saveMessages() {
 }
 function saveUnread() {
   localStorage.setItem('aasms_unread', JSON.stringify(unread));
+}
+
+// ── CONTACTS ──
+function saveContacts() {
+  localStorage.setItem('aasms_contacts', JSON.stringify(contacts));
+}
+
+function getDisplayName(number) {
+  return contacts[number] || number;
+}
+
+function setContactName(number, name) {
+  if (name && name.trim()) {
+    contacts[number] = name.trim();
+  } else {
+    delete contacts[number];
+  }
+  saveContacts();
 }
 
 // ── HELPERS ──

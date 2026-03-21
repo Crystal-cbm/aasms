@@ -1,4 +1,4 @@
-const CACHE = 'aasms-v4';
+const CACHE = 'aasms-v5';
 const ASSETS = [
   '/aasms/aasms.html',
   '/aasms/manifest.json',

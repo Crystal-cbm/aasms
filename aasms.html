@@ -7,7 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d0d0d">
 <title>AA SMS</title>
-<!-- aasms version 4 -->
+<!-- aasms version 5 -->
 <link rel="manifest" href="manifest.json">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -580,6 +580,7 @@ html, body {
   <div class="setup-logo">AA SMS</div>
   <div class="setup-title">Private Messaging</div>
   <div class="setup-sub">Enter your aa.net.uk VoIP details<br>to get started</div>
+  <div style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text-dim);margin-bottom:16px">v5</div>
 
   <div class="setup-form">
     <div class="field-group">
@@ -606,6 +607,7 @@ html, body {
       <div class="field-hint">Choose a private random topic name. In aa.net control pages → your VoIP number → SMS Inbound, enter: <strong>https://ntfy.sh/[your-topic]</strong></div>
     </div>
 
+    <div id="jsError" style="display:none;color:var(--danger);font-size:11px;font-family:'DM Mono',monospace;padding:8px;border:1px solid var(--danger);border-radius:6px;word-break:break-all"></div>
     <button class="btn btn-primary" onclick="saveSetup()">Save & Start →</button>
   </div>
 </div>
@@ -837,6 +839,7 @@ function hideNewChat() {
 
 // ── SETUP ──
 function saveSetup() {
+  console.log('saveSetup called');
   try {
     const number = document.getElementById('setupNumber').value.trim();
     const password = document.getElementById('setupPassword').value.trim();
@@ -1315,6 +1318,17 @@ function updateNotifButton() {
     status.style.color = enabled ? 'var(--accent)' : 'var(--text-dim)';
   }
 }
+
+// ── GLOBAL ERROR HANDLER ──
+window.onerror = function(msg, src, line, col, err) {
+  console.error('JS Error:', msg, 'line:', line);
+  // Show error on setup screen if visible
+  const errDiv = document.getElementById('jsError');
+  if (errDiv) {
+    errDiv.textContent = 'JS Error: ' + msg + ' (line ' + line + ')';
+    errDiv.style.display = 'block';
+  }
+};
 
 // ── SERVICE WORKER ──
 if ('serviceWorker' in navigator) {

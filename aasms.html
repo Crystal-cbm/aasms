@@ -7,6 +7,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0d0d0d">
 <title>AA SMS</title>
+<!-- aasms version 4 -->
 <link rel="manifest" href="manifest.json">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
@@ -759,7 +760,13 @@ let unread = {}; // { number: count }
 
 // ── INIT ──
 function init() {
-  config = JSON.parse(localStorage.getItem('aasms_config') || '{}');
+  // Restore config — try localStorage first, fall back to sessionStorage backup
+  const storedConfig = localStorage.getItem('aasms_config') || sessionStorage.getItem('aasms_config_backup') || '{}';
+  config = JSON.parse(storedConfig);
+  // Re-save to localStorage if it was missing
+  if (!localStorage.getItem('aasms_config') && config.number) {
+    localStorage.setItem('aasms_config', storedConfig);
+  }
   messages = JSON.parse(localStorage.getItem('aasms_messages') || '{}');
   unread = JSON.parse(localStorage.getItem('aasms_unread') || '{}');
   contacts = JSON.parse(localStorage.getItem('aasms_contacts') || '{}');
@@ -830,22 +837,31 @@ function hideNewChat() {
 
 // ── SETUP ──
 function saveSetup() {
-  const number = document.getElementById('setupNumber').value.trim();
-  const password = document.getElementById('setupPassword').value.trim();
-  const topic = document.getElementById('setupTopic').value.trim().replace(/^https?:\/\/ntfy\.sh\//,'');
+  try {
+    const number = document.getElementById('setupNumber').value.trim();
+    const password = document.getElementById('setupPassword').value.trim();
+    const topic = document.getElementById('setupTopic').value.trim().replace(/^https?:\/\/ntfy\.sh\//,'');
 
-  if (!number || !password || !topic) {
-    showToast('Please fill in all fields', 'error');
-    return;
+    if (!number || !password || !topic) {
+      showToast('Please fill in all fields', 'error');
+      return;
+    }
+
+    config = { number, password, topic };
+
+    // Save to both localStorage and sessionStorage for resilience
+    const configStr = JSON.stringify(config);
+    localStorage.setItem('aasms_config', configStr);
+    sessionStorage.setItem('aasms_config_backup', configStr);
+
+    document.getElementById('myNumber').textContent = number;
+    showScreen('threadScreen');
+    renderThreads();
+    connectNtfy();
+    showToast('Setup complete ✓', 'success');
+  } catch(e) {
+    alert('Save failed: ' + e.message + '. Try refreshing the page.');
   }
-
-  config = { number, password, topic };
-  localStorage.setItem('aasms_config', JSON.stringify(config));
-  document.getElementById('myNumber').textContent = number;
-  showScreen('threadScreen');
-  renderThreads();
-  connectNtfy();
-  showToast('Setup complete ✓', 'success');
 }
 
 // ── SETTINGS ──

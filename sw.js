@@ -1,4 +1,4 @@
-const CACHE = 'aasms-v1';
+const CACHE = 'aasms-v3';
 const ASSETS = [
   '/aasms/aasms.html',
   '/aasms/manifest.json',
@@ -22,7 +22,14 @@ self.addEventListener('activate', e => {
 });
 
 self.addEventListener('fetch', e => {
-  e.respondWith(
-    caches.match(e.request).then(r => r || fetch(e.request))
-  );
+  // Always fetch HTML fresh from network, cache everything else
+  if (e.request.url.endsWith('.html')) {
+    e.respondWith(
+      fetch(e.request).catch(() => caches.match(e.request))
+    );
+  } else {
+    e.respondWith(
+      caches.match(e.request).then(r => r || fetch(e.request))
+    );
+  }
 });
